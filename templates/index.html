@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phân Tích Điểm Bất Thường</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            background-color: #f0f2f6;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .main { 
+            background-color: #f0f2f6; 
+        }
+        button, input[type="submit"] { 
+            background-color: #4CAF50; 
+            color: white; 
+            border-radius: 5px; 
+            padding: 8px 16px;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover, input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+        input[type="file"]::file-selector-button {
+            font-weight: bold;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            padding: 5px 10px;
+            border: none;
+        }
+        select[multiple] {
+            width: 100%;
+            padding: 5px;
+            border-radius: 5px;
+            min-height: 100px;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        h1 { 
+            color: #2c3e50; 
+        }
+        h2 { 
+            color: #34495e; 
+        }
+        .alert {
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .alert-warning {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        footer { 
+            visibility: hidden; 
+        }
+        .footer {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            background-color: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 10px;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .sidebar {
+            width: 250px;
+            float: left;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            margin-right: 20px;
+        }
+        .content {
+            margin-left: 270px;
+        }
+        .logo img {
+            width: 100px;
+        }
+        .row {
+            display: flex;
+            align-items: center;
+        }
+        .row .logo {
+            flex: 1;
+        }
+        .row .title {
+            flex: 6;
+        }
+    </style>
+</head>
+<body>
+    <div class="main">
+        <div class="row">
+            <div class="logo">
+                {% if logo_error %}
+                    <p>🏫 THPT Marie Curie</p>
+                {% else %}
+                    <img src="/static/Logo_Marie_Curie.png" alt="Logo" width="100">
+                {% endif %}
+            </div>
+            <div class="title">
+                <h1>📊 Phân Tích Điểm Số Bất Thường Sử Dụng Z-Score</h1>
+            </div>
+        </div>
+        <p>
+            Ứng dụng phân tích điểm số bất thường dựa trên Z-score.<br>
+            - File CSV cần có header: "MaHS", "Lop", các cột môn học.<br>
+            - Z-score: Điểm bất thường nếu |z-score| > ngưỡng (mặc định 2).<br>
+            - Hỗ trợ UTF-8.
+        </p>
+
+        <div class="sidebar">
+            <h2>🛠 Cài đặt</h2>
+            <form method="post" enctype="multipart/form-data" action="/">
+                <label for="file">📂 Upload bảng điểm (CSV):</label><br>
+                <input type="file" id="file" name="file" accept=".csv" required><br><br>
+                <label for="z_threshold">Ngưỡng Z-Score:</label><br>
+                <input type="number" id="z_threshold" name="z_threshold" min="1.0" max="5.0" step="0.1" value="2.0"><br><br>
+                {% if class_options %}
+                    <label for="classes">Chọn lớp để lọc:</label><br>
+                    <select id="classes" name="classes" multiple>
+                        {% for cls in class_options %}
+                            <option value="{{ cls }}" selected>{{ cls }}</option>
+                        {% endfor %}
+                    </select><br><br>
+                {% endif %}
+                {% if subject_options %}
+                    <label for="subjects">Chọn môn để phân tích:</label><br>
+                    <select id="subjects" name="subjects" multiple>
+                        {% for subj in subject_options %}
+                            <option value="{{ subj }}" selected>{{ subj }}</option>
+                        {% endfor %}
+                    </select><br><br>
+                {% endif %}
+                <p>CSV phải có cột số cho điểm và mã hóa UTF-8.</p>
+                <input type="submit" value="Phân tích">
+            </form>
+        </div>
+
+        <div class="content">
+            {% if error %}
+                <div class="alert alert-error">{{ error }}</div>
+            {% endif %}
+            {% if warning %}
+                <div class="alert alert-warning">{{ warning }}</div>
+            {% endif %}
+            {% if classes %}
+                <h2>📋 Bảng điểm gốc và bất thường</h2>
+                <div style="display: flex;">
+                    <div style="flex: 3;">
+                        <h3>Bảng gốc học sinh</h3>
+                        {{ original_table|safe }}
+                        <h3>Học sinh bất thường</h3>
+                        {{ anomaly_table|safe }}
+                        {% if csv_data %}
+                            <form method="post" action="/download">
+                                <input type="hidden" name="csv_data" value="{{ csv_data }}">
+                                <input type="submit" value="📥 Xuất CSV học sinh bất thường">
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <h2>📊 Biểu đồ cột theo lớp</h2>
+                <div id="bar-chart"></div>
+                <script>
+                    {{ bar_chart|safe }}
+                </script>
+
+                <h2>📈 Scatter & Histogram theo môn</h2>
+                {% for subject, scatter, hist in charts %}
+                    <h3>{{ subject }}</h3>
+                    <div id="scatter-{{ subject }}"></div>
+                    <script>
+                        {{ scatter|safe }}
+                    </script>
+                    <div id="hist-{{ subject }}"></div>
+                    <script>
+                        {{ hist|safe }}
+                    </script>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="footer">
+        <p><b>Nhóm Thực Hiện:</b> Lại Nguyễn Minh Trí và những người bạn</p>
+        <p>📞 Liên hệ: 0908-083566 | 📧 Email: laingminhtri@gmail.com</p>
+        <p>© 2025 Trường THPT Marie Curie - Dự án Phân Tích Điểm Bất Thường</p>
+    </div>
+</body>
+</html>
